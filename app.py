@@ -1,6 +1,9 @@
 import streamlit as st
 from google import genai
 from google.genai import types
+from streamlit_mic_recorder import mic_recorder
+import speech_recognition as sr
+import io
 
 # --- 頁面設定 ---
 st.set_page_config(
@@ -22,6 +25,14 @@ if API_KEY and API_KEY != "PLEASE_REPLACE_WITH_YOUR_ACTUAL_API_KEY":
     client = genai.Client(api_key=API_KEY)
 else:
     client = None
+
+# --- 初始化對話與狀態記憶 (Session State) ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "fortune_result" not in st.session_state:
+    st.session_state.fortune_result = None
+if "show_voice_chat" not in st.session_state:
+    st.session_state.show_voice_chat = False
 
 # --- 自訂 CSS 樣式 ---
 st.markdown("""
@@ -147,6 +158,11 @@ if submitted:
     elif not client:
         st.warning("系統尚未配置 API 金鑰，請聯絡管理員設定後再試。")
     else:
+        # 重新祈求神諭時，清空之前的對話與記憶
+        st.session_state.chat_history = []
+        st.session_state.show_voice_chat = False
+        st.session_state.fortune_result = None
+        
         # 開始算命動畫
         with st.spinner("🌌 正在與星辰共鳴，解譯命運的軌跡..."):
             
@@ -173,11 +189,32 @@ if submitted:
             
             try:
                 import json
-                # 呼叫 Gemini 2.5 Flash API
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt,
-                )
+                from google.genai.errors import APIError
+                
+                models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+                response = None
+                used_model = None
+                
+                for model_name in models_to_try:
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                        )
+                        used_model = model_name
+                        break # 成功取得回應跳出迴圈
+                    except APIError as e:
+                        if "429" in str(e) or "Resource exhausted" in str(e):
+                            continue # 限額錯誤，換下一個模型
+                        else:
+                            raise e # 其他錯誤直接拋出
+                            
+                if not response:
+                    raise Exception("所有可用模型的 API 請求額度皆已耗盡，請稍後再試。")
+                    
+                # 提示使用者可能發生的降級
+                if used_model != models_to_try[0]:
+                    st.toast(f"ℹ️ 系統已自動切換至備援星象盤 ({used_model}) 為您推演。", icon="🔄")
                 
                 # 清理與解析 JSON 回應
                 raw_text = response.text.strip()
@@ -201,8 +238,90 @@ if submitted:
                 with tab4:
                     st.markdown(f'<div class="result-card">{result_data.get("tarot", "塔羅牌解讀失敗").replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
                 
+                # 將算命結果存入 Session Context，供後續語音對話使用
+                st.session_state.fortune_result = raw_text
+                
             except json.JSONDecodeError:
                 st.error("🔮 觀星台被雲霧遮蔽，解碼星象失敗，請稍後再重試一次。")
-                st.write(response.text) # 開發偵錯用
+                st.write(response.text if response else "無回應") # 開發偵錯用
             except Exception as e:
                 st.error(f"🔮 觀星台被雲霧遮蔽，預測失敗。原因：{str(e)}")
+
+# --- 語音諮詢服務模組 ---
+if st.session_state.fortune_result:
+    st.write("---")
+    
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        if st.button("💬 進一步語音討論", key="open_voice_chat", use_container_width=True):
+            st.session_state.show_voice_chat = True
+            
+    if st.session_state.show_voice_chat:
+        st.markdown("### 🎙️ 靈性語音對話")
+        st.info("請按下下方麥克風按鈕開始說話，再次點擊結束錄音，大師會親自為您解答。")
+        
+        # 顯示歷史對話記錄
+        for chat in st.session_state.chat_history:
+            if chat["role"] == "user":
+                with st.chat_message("user", avatar="👤"):
+                    st.write(chat["content"])
+            else:
+                with st.chat_message("assistant", avatar="🔮"):
+                    st.write(chat["content"])
+
+        # 錄音組件
+        audio_dict = mic_recorder(
+            start_prompt="🔴 按此開始錄音",
+            stop_prompt="⏹️ 按此停止並送出",
+            just_once=True,
+            use_container_width=True,
+            key='mic_recorder'
+        )
+        
+        if audio_dict:
+            with st.spinner("🎧 大師正在聆聽您的心聲..."):
+                # 將語音轉換為文字 (使用 SpeechRecognition 與 Google Web Speech API)
+                r = sr.Recognizer()
+                try:
+                    audio_data_io = io.BytesIO(audio_dict['bytes'])
+                    with sr.AudioFile(audio_data_io) as source:
+                        audio = r.record(source)
+                    # 辨識中文
+                    user_text = r.recognize_google(audio, language='zh-TW')
+                    
+                    if user_text:
+                        # 加入歷史紀錄並立刻顯示在畫面上
+                        st.session_state.chat_history.append({"role": "user", "content": user_text})
+                        with st.chat_message("user", avatar="👤"):
+                            st.write(user_text)
+                            
+                        # 向 Gemini 請求對話
+                        with st.chat_message("assistant", avatar="🔮"):
+                            with st.spinner("✨ 大師正在為您解惑..."):
+                                # 組合 System Instruction (包含算命結果背景) 與歷史訊息
+                                chat_prompt = f"""
+                                你是那位溫暖且充滿神秘感的命理大師。
+                                剛剛你為這位使用者算出的命理結果如下（請作為對話背景參考，不要重複貼上）：
+                                {st.session_state.fortune_result}
+                                
+                                請針對他接下來的問題進行安撫、建議與解惑。語氣要口語、自然且溫馨。
+                                使用者的問題是：{user_text}
+                                """
+                                
+                                try:
+                                    chat_response = client.models.generate_content(
+                                        model='gemini-2.5-flash',
+                                        contents=chat_prompt,
+                                    )
+                                    reply_text = chat_response.text
+                                    st.write(reply_text)
+                                    st.session_state.chat_history.append({"role": "assistant", "content": reply_text})
+                                except Exception as e:
+                                    st.error(f"對話中斷：{str(e)}")
+                                
+                except sr.UnknownValueError:
+                    st.warning("聽不清楚您的聲音，請再說一次。")
+                except sr.RequestError as e:
+                    st.error(f"語音辨識服務發生錯誤：{e}")
+                except Exception as e:
+                    st.error(f"錄音處理錯誤：{str(e)}")
