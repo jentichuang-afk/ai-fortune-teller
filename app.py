@@ -120,10 +120,7 @@ with st.form("fortune_form"):
     with col4:
         birth_time = st.time_input("出生時間")
         
-    method = st.selectbox(
-        "選擇神諭方式",
-        ["紫微斗數 (東方星象學)", "八字命理 (四柱預測)", "西方占星 (十二星座運勢)", "塔羅牌陣 (潛意識探索)"]
-    )
+    # 移除了單一算命方式選擇，改為一次算四種
     
     COMMON_QUESTIONS = [
         "自訂問題 (我要自己打)",
@@ -153,15 +150,19 @@ if submitted:
         # 開始算命動畫
         with st.spinner("🌌 正在與星辰共鳴，解譯命運的軌跡..."):
             
-            # 定義 Prompt 文本
+            # 定義 Prompt 文本，要求回傳 JSON 格式
             prompt = f"""
-            你現在是一位擁有數十年經驗的頂尖命理大師，精通紫微斗數、八字、西方占星與塔羅。
+            你現在是一位擁有數十年經驗的頂尖命理大師，精通「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」。
             你的語氣應該充滿神秘感、溫暖且富有哲理。
-            請根據以下使用者的資訊與問題，使用【{method}】的視角，為他進行一次深度的算命與解讀，請用繁體中文回答。
-            請不要輸出 Markdown 表格，請用條列式或段落優雅地排版。輸出內容包含：
-            1. **命盤簡析** (基於使用者資訊快速起盤或看盤的虛擬結果)
-            2. **神諭解答** (針對問題的核心回覆)
-            3. **大師箴言** (一句勉勵或改變命運的建議)
+            請根據以下使用者的資訊與問題，分別使用這四種不同的命理視角，為他進行深度的算命與解讀，請用繁體中文回答。
+            請務必以 **純 JSON 格式** 輸出，不要包含任何 markdown 語法 (如 ```json) 或其他多餘的文字。
+            JSON 的結構必須如下：
+            {{
+                "ziwei": "紫微斗數的完整解讀 (包含命盤簡析、解答、箴言，並使用適當的段落與折行排版)",
+                "bazi": "八字命理的完整解讀",
+                "astrology": "西方占星的完整解讀",
+                "tarot": "塔羅牌陣的完整解讀"
+            }}
 
             **使用者資訊**：
             - 姓名：{name}
@@ -171,20 +172,37 @@ if submitted:
             """
             
             try:
-                # 呼叫 Gemini 2.5 Flash API (推薦使用此輕量快速的最新預設模型)
+                import json
+                # 呼叫 Gemini 2.5 Flash API
                 response = client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=prompt,
                 )
-                result_text = response.text
                 
-                # 美化呈現
-                st.markdown(f"""
-                <div class="result-card">
-                    <h3>📜 命運的啟示</h4>
-                    {result_text.replace('\n', '<br>')}
-                </div>
-                """, unsafe_allow_html=True)
+                # 清理與解析 JSON 回應
+                raw_text = response.text.strip()
+                if raw_text.startswith("```json"):
+                    raw_text = raw_text[7:-3].strip()
+                elif raw_text.startswith("```"):
+                    raw_text = raw_text[3:-3].strip()
+                    
+                result_data = json.loads(raw_text)
                 
+                # 美化呈現：使用 Tabs 一次展示四種結果
+                st.markdown("<h3>📜 星辰匯聚的四大神諭 📜</h3>", unsafe_allow_html=True)
+                tab1, tab2, tab3, tab4 = st.tabs(["☯️ 紫微斗數", "📜 八字命理", "✨ 西方占星", "🃏 塔羅牌陣"])
+                
+                with tab1:
+                    st.markdown(f'<div class="result-card">{result_data.get("ziwei", "紫微斗數解讀失敗").replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+                with tab2:
+                    st.markdown(f'<div class="result-card">{result_data.get("bazi", "八字命理解讀失敗").replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+                with tab3:
+                    st.markdown(f'<div class="result-card">{result_data.get("astrology", "西方占星解讀失敗").replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+                with tab4:
+                    st.markdown(f'<div class="result-card">{result_data.get("tarot", "塔羅牌解讀失敗").replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+                
+            except json.JSONDecodeError:
+                st.error("🔮 觀星台被雲霧遮蔽，解碼星象失敗，請稍後再重試一次。")
+                st.write(response.text) # 開發偵錯用
             except Exception as e:
                 st.error(f"🔮 觀星台被雲霧遮蔽，預測失敗。原因：{str(e)}")
