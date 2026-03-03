@@ -109,9 +109,14 @@ with st.form("fortune_form"):
     with col2:
         gender = st.selectbox("性別", ["男", "女", "其他", "保密"])
     
+    import datetime
+    min_date = datetime.date(1920, 1, 1)
+    max_date = datetime.date.today()
+    default_date = datetime.date(1990, 1, 1)
+    
     col3, col4 = st.columns(2)
     with col3:
-        birth_date = st.date_input("出生日期")
+        birth_date = st.date_input("出生日期", min_value=min_date, max_value=max_date, value=default_date)
     with col4:
         birth_time = st.time_input("出生時間")
         
