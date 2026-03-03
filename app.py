@@ -4,6 +4,7 @@ from google.genai import types
 from streamlit_mic_recorder import mic_recorder
 import speech_recognition as sr
 import io
+from pydub import AudioSegment
 
 # --- 頁面設定 ---
 st.set_page_config(
@@ -283,8 +284,17 @@ if st.session_state.fortune_result:
                 # 將語音轉換為文字 (使用 SpeechRecognition 與 Google Web Speech API)
                 r = sr.Recognizer()
                 try:
+                    # 將瀏覽器傳來的 WebM/Ogg 原始音檔轉為 pydub AudioSegment
                     audio_data_io = io.BytesIO(audio_dict['bytes'])
-                    with sr.AudioFile(audio_data_io) as source:
+                    audio_segment = AudioSegment.from_file(audio_data_io)
+                    
+                    # 將 AudioSegment 匯出為標準的 PCM WAV 格式放入記憶體
+                    wav_io = io.BytesIO()
+                    audio_segment.export(wav_io, format="wav")
+                    wav_io.seek(0)
+                    
+                    # 讓 SpeechRecognition 讀取標準的 WAV
+                    with sr.AudioFile(wav_io) as source:
                         audio = r.record(source)
                     # 辨識中文
                     user_text = r.recognize_google(audio, language='zh-TW')
