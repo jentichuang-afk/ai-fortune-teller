@@ -125,7 +125,21 @@ with st.form("fortune_form"):
         ["紫微斗數 (東方星象學)", "八字命理 (四柱預測)", "西方占星 (十二星座運勢)", "塔羅牌陣 (潛意識探索)"]
     )
     
-    question = st.text_area("請誠心寫下您心中的疑問", placeholder="例如：我接下來半年的事業運勢如何？", height=100)
+    COMMON_QUESTIONS = [
+        "自訂問題 (我要自己打)",
+        "我接下來半年的事業運勢如何？",
+        "我近期的感情狀況會有新發展嗎？",
+        "我適合換工作或轉換跑道嗎？",
+        "我最近的財運與投資吉凶如何？",
+        "我的健康狀況有沒有需要特別留意的地方？",
+        "我今年的人際關係與貴人運如何？"
+    ]
+    selected_q = st.selectbox("🔮 選擇想問的問題，或自行輸入", COMMON_QUESTIONS)
+    
+    if selected_q == "自訂問題 (我要自己打)":
+        question = st.text_area("請誠心寫下您心中的疑問", placeholder="例如：我該如何突破目前的事業瓶頸？", height=80)
+    else:
+        question = selected_q
     
     submitted = st.form_submit_button("✨ 祈求神諭 ✨")
 
