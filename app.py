@@ -34,6 +34,11 @@ if "fortune_result" not in st.session_state:
     st.session_state.fortune_result = None
 if "show_voice_chat" not in st.session_state:
     st.session_state.show_voice_chat = False
+if "user_profiles" not in st.session_state:
+    # 儲存結構: {"王大明": {"gender": "男", "birth_date": date, "birth_time": time}}
+    st.session_state.user_profiles = {}
+if "selected_profile" not in st.session_state:
+    st.session_state.selected_profile = "➕ 新增 / 清空資料"
 
 # --- 自訂 CSS 樣式 ---
 st.markdown("""
@@ -114,23 +119,47 @@ st.write("---")
 if not client:
     st.error("⚠️ 尚未設定有效的 API 金鑰。請於本地 `.streamlit/secrets.toml` 或 Streamlit Cloud 後台設定 `GEMINI_API_KEY`。")
 
+import datetime
+
+# --- 使用者資料管理區塊 (Profile Management) ---
+profile_options = ["➕ 新增 / 清空資料"] + list(st.session_state.user_profiles.keys())
+selected_profile = st.selectbox("👤 選擇已儲存的個人資料", profile_options, index=profile_options.index(st.session_state.selected_profile) if st.session_state.selected_profile in profile_options else 0)
+
+# 更新當前選擇狀態，如果切換了 profile，刷新頁面載入新資料
+if selected_profile != st.session_state.selected_profile:
+    st.session_state.selected_profile = selected_profile
+    st.rerun()
+
+# --- 根據選擇的設定檔預填資料 ---
+default_name = ""
+default_gender_idx = 0
+default_date = datetime.date(1990, 1, 1)
+default_time = datetime.time(12, 0)
+gender_options = ["男", "女", "其他", "保密"]
+
+if selected_profile != "➕ 新增 / 清空資料":
+    profile_data = st.session_state.user_profiles[selected_profile]
+    default_name = selected_profile
+    if profile_data["gender"] in gender_options:
+        default_gender_idx = gender_options.index(profile_data["gender"])
+    default_date = profile_data["birth_date"]
+    default_time = profile_data["birth_time"]
+
 with st.form("fortune_form"):
     col1, col2 = st.columns(2)
     with col1:
-        name = st.text_input("您的姓名", placeholder="請輸入姓名")
+        name = st.text_input("您的姓名", value=default_name, placeholder="請輸入姓名")
     with col2:
-        gender = st.selectbox("性別", ["男", "女", "其他", "保密"])
+        gender = st.selectbox("性別", gender_options, index=default_gender_idx)
     
-    import datetime
     min_date = datetime.date(1920, 1, 1)
     max_date = datetime.date.today()
-    default_date = datetime.date(1990, 1, 1)
     
     col3, col4 = st.columns(2)
     with col3:
         birth_date = st.date_input("出生日期", min_value=min_date, max_value=max_date, value=default_date)
     with col4:
-        birth_time = st.time_input("出生時間")
+        birth_time = st.time_input("出生時間", value=default_time)
         
     # 移除了單一算命方式選擇，改為一次算四種
     
@@ -151,6 +180,30 @@ with st.form("fortune_form"):
         question = selected_q
     
     submitted = st.form_submit_button("✨ 祈求神諭 ✨")
+
+# --- 儲存與刪除設定檔按鈕 ---
+col_btn1, col_btn2 = st.columns(2)
+with col_btn1:
+    if st.button("💾 儲存目前填寫的資料"):
+        if name.strip():
+            st.session_state.user_profiles[name.strip()] = {
+                "gender": gender,
+                "birth_date": birth_date,
+                "birth_time": birth_time
+            }
+            st.session_state.selected_profile = name.strip()
+            st.success(f"✅ 已儲存「{name.strip()}」的個人資料！")
+            st.rerun()
+        else:
+            st.warning("⚠️ 請先在上方填寫姓名，才能儲存資料。")
+with col_btn2:
+    if selected_profile != "➕ 新增 / 清空資料":
+        if st.button("🗑️ 刪除此筆資料"):
+            if selected_profile in st.session_state.user_profiles:
+                del st.session_state.user_profiles[selected_profile]
+                st.session_state.selected_profile = "➕ 新增 / 清空資料"
+                st.success(f"✅ 已刪除「{selected_profile}」的資料。")
+                st.rerun()
 
 # --- 處理送出 ---
 if submitted:
