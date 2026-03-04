@@ -175,10 +175,11 @@ with st.form("fortune_form"):
     
     if selected_q == "自訂問題 (我要自己打)":
         question = st.text_area("請誠心寫下您心中的疑問", placeholder="例如：我該如何突破目前的事業瓶頸？", height=80)
-    else:
-        question = selected_q
-    
-    submitted = st.form_submit_button("✨ 祈求神諭 ✨")
+    col_form_btn1, col_form_btn2 = st.columns(2)
+    with col_form_btn1:
+        submitted = st.form_submit_button("✨ 祈求四柱神諭 ✨")
+    with col_form_btn2:
+        daily_fortune_btn = st.form_submit_button("🌞 今日運勢分析 (含化解建議)")
 
 # --- 產生個人專屬連結 (無痕儲存) ---
 st.write("---")
@@ -211,7 +212,7 @@ if st.button("🔗 產生專屬個人連結"):
     else:
         st.warning("⚠️ 請先在上方表單填寫姓名，才能產生專屬連結。")
 
-# --- 處理送出 ---
+# --- 處理送出：四柱神諭 ---
 if submitted:
     if not name or not question:
         st.warning("請填寫您的姓名與想問的問題，神明才能給予指引。")
@@ -306,6 +307,59 @@ if submitted:
                 st.write(response.text if response else "無回應") # 開發偵錯用
             except Exception as e:
                 st.error(f"🔮 觀星台被雲霧遮蔽，預測失敗。原因：{str(e)}")
+
+# --- 處理送出：今日運勢分析 ---
+if daily_fortune_btn:
+    if not name:
+        st.warning("請填寫您的姓名，神明才能為您解析今日運勢。")
+    elif not client:
+        st.warning("系統尚未配置 API 金鑰，請聯絡管理員設定後再試。")
+    else:
+        # 重新祈求神諭時，清空之前的對話與記憶
+        st.session_state.chat_history = []
+        st.session_state.show_voice_chat = False
+        st.session_state.fortune_result = None
+        
+        with st.spinner("🌞 正在結合星象與天氣，推算您今日的專屬運勢..."):
+            today_str = datetime.date.today().strftime("%Y年%m月%d日")
+            prompt = f"""
+            你現在是一位關心信眾、具備深厚命理學背景的大師。
+            今天是 {today_str}。
+            請根據以下使用者的資訊，推算他「今天一整天的綜合運勢」。
+            **強制要求：如果運勢中有任何不順遂、健康疑慮、或是可能發生衝突的「壞運勢」部分，你必須明確列出，並緊接著提供具體、可行、且能安定人心的「化解法則或開運建議」。**
+            語氣要溫暖、像是一位長輩在叮嚀。
+            
+            **使用者資訊**：
+            - 姓名：{name}
+            - 性別：{gender}
+            - 出生時間：{birth_date} {birth_time}
+            
+            請直接輸出一段充滿關懷的長文分析（請用 Markdown 格式，適當使用標題、粗體與條列式，特別標註「化解重點」）。
+            """
+            
+            try:
+                from google.genai.errors import APIError
+                models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+                response = None
+                
+                for attempt_model in models_to_try:
+                    try:
+                        response = client.models.generate_content(
+                            model=attempt_model,
+                            contents=prompt,
+                        )
+                        if response and response.text:
+                            # 將結果存入 session_state 供語音模組使用 (這樣語音模組也能針對今日運勢聊天)
+                            st.session_state.fortune_result = response.text
+                            st.markdown("<div class='result-card'><h3>🌞 今日運勢與化解指引</h3>" + response.text.replace('\n', '<br>') + "</div>", unsafe_allow_html=True)
+                            break
+                    except APIError as e:
+                        if "429" in str(e) and attempt_model != models_to_try[-1]:
+                            continue
+                        raise e
+                        
+            except Exception as e:
+                st.error(f"🌞 雲層太厚，看不清您的今日運勢。原因：{str(e)}")
 
 # --- 語音諮詢服務模組 ---
 if st.session_state.fortune_result:
