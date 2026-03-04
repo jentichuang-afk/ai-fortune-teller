@@ -235,9 +235,12 @@ if submitted:
         # 開始算命動畫
         with st.spinner("🌌 正在與星辰共鳴，解譯命運的軌跡..."):
             
+            today_str = datetime.date.today().strftime("%Y年%m月%d日")
+            current_year = datetime.date.today().year
             # 定義 Prompt 文本，要求回傳 JSON 格式
             prompt = f"""
             你現在是一位擁有數十年經驗的頂尖命理大師，精通「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」。
+            今天是 {today_str}。在回答任何關於「今年」、「明年」或特定年份的運勢時，請務必以今年 ({current_year}年) 為基準進行推算，切勿給出過期年份的預測。
             你的語氣應該充滿神秘感、溫暖且富有哲理。
             請根據以下使用者的資訊與問題，分別使用這四種不同的命理視角，為他進行深度的算命與解讀，請用繁體中文回答。
             請務必以 **純 JSON 格式** 輸出，不要包含任何 markdown 語法 (如 ```json) 或其他多餘的文字。
