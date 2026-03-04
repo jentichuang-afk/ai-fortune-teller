@@ -62,10 +62,15 @@ h1, h2, h3, .stMarkdown p {
 .stTextArea > div > div > textarea,
 .stDateInput > div > div > input,
 .stTimeInput > div > div > input {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 215, 0, 0.3);
-    color: white;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    background-color: rgba(20, 10, 40, 0.8) !important;
+    border: 1px solid rgba(255, 215, 0, 0.5) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.5) !important;
+}
+
+/* 確保選擇框內部文字顏色為白色 */
+div[data-baseweb="select"] span {
+    color: #ffffff !important;
 }
 
 /* 按鈕美化 */
