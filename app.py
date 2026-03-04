@@ -121,6 +121,26 @@ if not client:
 
 import datetime
 import urllib.parse
+from streamlit_javascript import st_javascript
+
+# --- 獲取客戶端 (瀏覽器) 所在時區的當下時間 ---
+# 這樣可以確保無論伺服器在哪個時區，AI 收到的都是使用者當地的日期與時間
+client_date_js = "new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })"
+client_local_date = st_javascript(client_date_js)
+
+# 如果還抓不到 (初次載入或JS未執行)，先用伺服器時間備用
+if not client_local_date:
+    today_str = datetime.date.today().strftime("%Y年%m月%d日")
+    current_year = datetime.date.today().year
+else:
+    # client_local_date 格式為 "YYYY/MM/DD" (根據 zh-TW)
+    parts = client_local_date.split("/")
+    if len(parts) == 3:
+        today_str = f"{parts[0]}年{parts[1]}月{parts[2]}日"
+        current_year = parts[0]
+    else:
+        today_str = datetime.date.today().strftime("%Y年%m月%d日")
+        current_year = datetime.date.today().year
 
 # --- 從網址參數 (URL Query Params) 讀取個人資料 ---
 query_params = st.query_params
@@ -235,8 +255,6 @@ if submitted:
         # 開始算命動畫
         with st.spinner("🌌 正在與星辰共鳴，解譯命運的軌跡..."):
             
-            today_str = datetime.date.today().strftime("%Y年%m月%d日")
-            current_year = datetime.date.today().year
             # 定義 Prompt 文本，要求回傳 JSON 格式
             prompt = f"""
             你現在是一位擁有數十年經驗的頂尖命理大師，精通「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」。
@@ -332,11 +350,10 @@ if daily_fortune_btn:
         st.session_state.fortune_result = None
         
         with st.spinner("🌞 正在結合星象與天氣，推算您今日的專屬運勢..."):
-            today_str = datetime.date.today().strftime("%Y年%m月%d日")
             prompt = f"""
             你現在是一位關心信眾、具備深厚命理學背景的大師，精通「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」。
             今天是 {today_str}。
-            請根據以下使用者的資訊，綜合運用「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」這四種不同視角，來交叉推算他「今天一整天的綜合運勢」。
+            請根據以下使用者的資訊，綜合運用「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」這四種不同視角，來交叉推算他「今天 ({today_str}) 一整天的綜合運勢」。
             **強制要求：如果運勢中有任何不順遂、健康疑慮、或是可能發生衝突的「壞運勢」部分，你必須明確列出，並緊接著提供具體、可行、且能安定人心的「化解法則或開運建議」。**
             語氣要溫暖、像是一位長輩在叮嚀。
             
