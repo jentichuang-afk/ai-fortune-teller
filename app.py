@@ -180,6 +180,9 @@ with st.form("fortune_form"):
     
     if selected_q == "自訂問題 (我要自己打)":
         question = st.text_area("請誠心寫下您心中的疑問", placeholder="例如：我該如何突破目前的事業瓶頸？", height=80)
+    else:
+        question = selected_q
+        
     col_form_btn1, col_form_btn2 = st.columns(2)
     with col_form_btn1:
         submitted = st.form_submit_button("✨ 祈求四柱神諭 ✨")
@@ -328,9 +331,9 @@ if daily_fortune_btn:
         with st.spinner("🌞 正在結合星象與天氣，推算您今日的專屬運勢..."):
             today_str = datetime.date.today().strftime("%Y年%m月%d日")
             prompt = f"""
-            你現在是一位關心信眾、具備深厚命理學背景的大師。
+            你現在是一位關心信眾、具備深厚命理學背景的大師，精通「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」。
             今天是 {today_str}。
-            請根據以下使用者的資訊，推算他「今天一整天的綜合運勢」。
+            請根據以下使用者的資訊，綜合運用「紫微斗數」、「八字命理」、「西方占星」與「塔羅牌」這四種不同視角，來交叉推算他「今天一整天的綜合運勢」。
             **強制要求：如果運勢中有任何不順遂、健康疑慮、或是可能發生衝突的「壞運勢」部分，你必須明確列出，並緊接著提供具體、可行、且能安定人心的「化解法則或開運建議」。**
             語氣要溫暖、像是一位長輩在叮嚀。
             
@@ -339,7 +342,7 @@ if daily_fortune_btn:
             - 性別：{gender}
             - 出生時間：{birth_date} {birth_time}
             
-            請直接輸出一段充滿關懷的長文分析（請用 Markdown 格式，適當使用標題、粗體與條列式，特別標註「化解重點」）。
+            請直接輸出一段充滿關懷的長文分析（請用 Markdown 格式，適當使用標題、粗體與條列式，將四種命理的觀點分段或融合解釋，並特別標註「化解重點」）。
             """
             
             try:
