@@ -34,11 +34,6 @@ if "fortune_result" not in st.session_state:
     st.session_state.fortune_result = None
 if "show_voice_chat" not in st.session_state:
     st.session_state.show_voice_chat = False
-if "user_profiles" not in st.session_state:
-    # 儲存結構: {"王大明": {"gender": "男", "birth_date": date, "birth_time": time}}
-    st.session_state.user_profiles = {}
-if "selected_profile" not in st.session_state:
-    st.session_state.selected_profile = "➕ 新增 / 清空資料"
 
 # --- 自訂 CSS 樣式 ---
 st.markdown("""
@@ -120,30 +115,34 @@ if not client:
     st.error("⚠️ 尚未設定有效的 API 金鑰。請於本地 `.streamlit/secrets.toml` 或 Streamlit Cloud 後台設定 `GEMINI_API_KEY`。")
 
 import datetime
+import urllib.parse
 
-# --- 使用者資料管理區塊 (Profile Management) ---
-profile_options = ["➕ 新增 / 清空資料"] + list(st.session_state.user_profiles.keys())
-selected_profile = st.selectbox("👤 選擇已儲存的個人資料", profile_options, index=profile_options.index(st.session_state.selected_profile) if st.session_state.selected_profile in profile_options else 0)
+# --- 從網址參數 (URL Query Params) 讀取個人資料 ---
+query_params = st.query_params
 
-# 更新當前選擇狀態，如果切換了 profile，刷新頁面載入新資料
-if selected_profile != st.session_state.selected_profile:
-    st.session_state.selected_profile = selected_profile
-    st.rerun()
-
-# --- 根據選擇的設定檔預填資料 ---
-default_name = ""
-default_gender_idx = 0
-default_date = datetime.date(1990, 1, 1)
-default_time = datetime.time(12, 0)
+default_name = query_params.get("n", "")
+default_gender = query_params.get("g", "男")
 gender_options = ["男", "女", "其他", "保密"]
+default_gender_idx = gender_options.index(default_gender) if default_gender in gender_options else 0
 
-if selected_profile != "➕ 新增 / 清空資料":
-    profile_data = st.session_state.user_profiles[selected_profile]
-    default_name = selected_profile
-    if profile_data["gender"] in gender_options:
-        default_gender_idx = gender_options.index(profile_data["gender"])
-    default_date = profile_data["birth_date"]
-    default_time = profile_data["birth_time"]
+# 預設時間處理
+default_date = datetime.date(1990, 1, 1)
+if "d" in query_params:
+    try:
+        default_date = datetime.datetime.strptime(query_params.get("d"), "%Y-%m-%d").date()
+    except ValueError:
+        pass
+
+default_time = datetime.time(12, 0)
+if "t" in query_params:
+    try:
+        default_time = datetime.datetime.strptime(query_params.get("t"), "%H:%M").time()
+    except ValueError:
+        pass
+
+# 根據 URL 是否有帶參數來顯示歡迎語
+if default_name:
+    st.success(f"🌟 歡迎回來！已從專屬連結載入 **{default_name}** 的命理設定檔。")
 
 with st.form("fortune_form"):
     col1, col2 = st.columns(2)
@@ -181,29 +180,36 @@ with st.form("fortune_form"):
     
     submitted = st.form_submit_button("✨ 祈求神諭 ✨")
 
-# --- 儲存與刪除設定檔按鈕 ---
-col_btn1, col_btn2 = st.columns(2)
-with col_btn1:
-    if st.button("💾 儲存目前填寫的資料"):
-        if name.strip():
-            st.session_state.user_profiles[name.strip()] = {
-                "gender": gender,
-                "birth_date": birth_date,
-                "birth_time": birth_time
-            }
-            st.session_state.selected_profile = name.strip()
-            st.success(f"✅ 已儲存「{name.strip()}」的個人資料！")
-            st.rerun()
-        else:
-            st.warning("⚠️ 請先在上方填寫姓名，才能儲存資料。")
-with col_btn2:
-    if selected_profile != "➕ 新增 / 清空資料":
-        if st.button("🗑️ 刪除此筆資料"):
-            if selected_profile in st.session_state.user_profiles:
-                del st.session_state.user_profiles[selected_profile]
-                st.session_state.selected_profile = "➕ 新增 / 清空資料"
-                st.success(f"✅ 已刪除「{selected_profile}」的資料。")
-                st.rerun()
+# --- 產生個人專屬連結 (無痕儲存) ---
+st.write("---")
+st.markdown("### 🔗 儲存個人資料 (專屬連結)")
+st.info("為了保護您的隱私，我們不將個人資料儲存在雲端伺服器。按下方按鈕即可產生「**包含個人資料的專屬網址**」，只要將該網址加入書籤 (我的最愛)，下次點開就會自動填好所有資料哦！")
+
+if st.button("🔗 產生專屬個人連結"):
+    if name.strip():
+        # 將表單狀態編碼到 URL 參數
+        params = {
+            "n": name.strip(),
+            "g": gender,
+            "d": birth_date.strftime("%Y-%m-%d"),
+            "t": birth_time.strftime("%H:%M")
+        }
+        
+        # 獲取當前 Host URL 以生成完整連結字串
+        # 在 Streamlit 中產生相對應 URL 可以透過組合
+        query_string = urllib.parse.urlencode(params)
+        st.success("✅ **專屬連結已產生！請複製下方網址並加到瀏覽器書籤：**")
+        
+        # 嘗試使用 st.query_params 將參數推播至實體網址列 (Streamlit 1.30+)
+        try:
+            st.query_params.from_dict(params)
+        except Exception as e:
+            pass # 回退容錯
+            
+        st.code(f"?{query_string}", language="text")
+        st.markdown("<p style='font-size:0.9em; color:#FFD700;'>☝️ 我們已將參數加進您上方的網址列，請直接按下 <b>Ctrl + D</b> 或點擊網址列旁邊的星星圖案，將該網址加入我的最愛即可！</p>", unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ 請先在上方表單填寫姓名，才能產生專屬連結。")
 
 # --- 處理送出 ---
 if submitted:
